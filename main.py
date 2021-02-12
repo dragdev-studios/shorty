@@ -4,13 +4,16 @@ from urllib.parse import quote_plus
 
 import aiohttp
 import aiosqlite
-from fastapi import FastAPI, HTTPException, Header, Cookie, Request
+from fastapi import FastAPI, HTTPException, Header  #, Cookie, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+
+# Starlette is automatically installed with fastapi, but requirements plugin doesn't realise that.
+# noinspection PyPackageRequirements
 from starlette.background import BackgroundTask
 
 import models
-from ratelimit import Bucket
+# from ratelimit import Bucket
 
 allowed_statuses = list(range(100, 400))
 

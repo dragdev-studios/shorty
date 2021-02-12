@@ -1,0 +1,6 @@
+uvicorn==0.13.3
+fastapi==0.63.0
+aiofiles==0.6.0
+aiohttp==3.7.3
+aiosqlite==0.16.1
+# Yes, we're really asynchronous. Don't ask.
