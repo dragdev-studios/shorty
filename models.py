@@ -11,7 +11,7 @@ from ratelimit import limits
 
 class ShortenBody(BaseModel):
     source: str
-    length: int = Field(description="The length of the shortened output.")
+    length: int = Field(description="The length of the shortened output.", lt=10240, gt=3)
     secret: str
     expire: int = Field(description="After how many seconds to delete the shortened URL")
 
