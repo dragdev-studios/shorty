@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<!--[if lt IE 7]>      <html class="no-js lt-ie9 lt-ie8 lt-ie7"> <![endif]-->
+<!--[if IE 7]>         <html class="no-js lt-ie9 lt-ie8"> <![endif]-->
+<!--[if IE 8]>         <html class="no-js lt-ie9"> <![endif]-->
+<!--[if gt IE 8]>      <html class="no-js"> <![endif]-->
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <title>Shorty - Create URL:</title>
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="stylesheet" href="styles/solarized-light.css">
+        <script src="/js/hl.js"></script>
+        <script>hljs.initHighlightingOnLoad();</script>
+        <script src="/js/warn.js" async></script>
+        <!-- The warn.js script isn't really needed until the user clicks the submit button. That's when things can go wrong. -->
+    </head>
+    <body>
+        <form>
+            <label>URL to shorten: </label>
+            <input type="url" id="url" required/><br>
+            <label>Length of shortened URL: </label>
+            <input type="number" min="4" max="32" value="4" id="length"/><br>
+            <button type="button" id="submit">Create shortened URL!</button>
+        </form>
+        <hr>
+        <p>CURL code (this is recommended over this bodged webpage):</p>
+        <pre><code class="sh shell" id="curl-code"></code></pre>
+        
+        <script>
+            'use strict';
+            function parse_data() {
+                const url = document.getElementById("url").value;
+                const length = document.getElementById("length").value;
+                const data = {
+                    source: url,
+                    length: length*1,
+                    expire: 0,
+                    secret: "super-secret"
+                };
+                return data;
+            };
+            function update_curl_code() {
+                const codeblock = document.getElementById("curl-code");
+                var content = "$ curl -X POST -H \"short.dragdev.xyz\" -H \"Content-Type: application/json\" \\\n-d {} \\\n£/s";
+                content = content.replace("{}", JSON.stringify(parse_data()));
+                content = content.replace(/\£\/s/, window.location.href+"/s");
+                codeblock.innerText = content;
+            };
+            window.addEventListener("keydown", () => {update_curl_code()});
+            window.addEventListener("keyup", () => {update_curl_code()});
+            async function submit() {
+                submitButton.disabled = true;
+                const data = parse_data();
+                console.debug("Posting data:");
+                console.debug(JSON.stringify(data, null, 2));
+                const response = await fetch(
+                    "/s",
+                    {
+                        method: "POST",
+                        body: JSON.stringify(data),
+                        headers: {
+                            "Content-Type": "application/json"
+                        }
+                    }
+                );
+                const response_data = await response.json();
+                if(!response.ok) {
+                    if (response.status==400) {
+                        updateWarning("Invalid URL", "Please make sure you typed it correct and the target server is actually online.", response_data);
+                        alert("The URL is invalid.");
+                        return
+                    };
+                    alert("Failed to create vanity..")
+                    console.error(response.status + response.statusText);
+                    console.error(JSON.stringify(response_data));
+                    return;
+                };
+                const rese = document.createElement("div");
+                rese.innerHTML = "<p>Your shortened URL: <a href=\"$\">$</a></p>".replace(/\$/g, window.location.href + response_data.code);
+                document.body.appendChild(rese);
+            };
+
+            const submitButton = document.getElementById("submit");
+            submitButton.addEventListener(
+                "click",
+                () => {submit().catch((e)=>{console.error(e);alert("error. Check console.")});submitButton.disabled = false;}
+            );
+        </script>
+        <!-- <script src="" async defer></script> -->
+    </body>
+</html>
