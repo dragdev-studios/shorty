@@ -37,7 +37,7 @@ EMBED_DATA = """
 </body>
 </html>
 """
-EMBED_RESPONSE = HTMLResponse(EMBED_DATA, 403)
+EMBED_RESPONSE = HTMLResponse(EMBED_DATA, 200)
 
 app = FastAPI(title="Shorty", description="Self-hosted link shortener that also serves as a vanity link provider.")
 app.db = None
@@ -48,9 +48,9 @@ async def update_usage(serve, ua, src: str = "short"):
         return  # safe bet that it was a bot crawling.
     await app.db.execute(
         """
-        UPDATE ?
+        UPDATE '?'
         SET uses=uses+1
-        WHERE serve=?;""",
+        WHERE serve='?';""",
         (src, serve)
     )
     await app.db.commit()
@@ -113,6 +113,9 @@ async def shutdown():
 
 @app.get("/{path}")
 async def get_vanity_or_shortened(path: str, user_agent: str = Header("No User Agent")):
+    print(user_agent, "Bot" in user_agent)
+    if "bot" in user_agent or "python" in user_agent or "curl" in user_agent or "wget" in user_agent:
+        return EMBED_RESPONSE
     async with app.db.execute(
             """
             SELECT source FROM short WHERE serve=?

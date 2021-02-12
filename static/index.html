@@ -10,26 +10,70 @@
         <title>Shorty - Create URL:</title>
         <meta name="description" content="">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <link rel="stylesheet" href="styles/solarized-light.css">
+        <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/10.5.0/styles/solarized-dark.min.css">
         <script src="/js/hl.js"></script>
         <script>hljs.initHighlightingOnLoad();</script>
         <script src="/js/warn.js" async></script>
         <!-- The warn.js script isn't really needed until the user clicks the submit button. That's when things can go wrong. -->
+        <style>
+            html {
+                color: #dadddd;
+                background-color: #36393f;
+                font-family: Whitney,Helvetica Neue,Helvetica,Arial,sans-serif;
+                font-weight: 400;
+                font-size: 1rem;
+                line-height: 1.375rem;
+                /* white-space: pre-wrap; */
+            }
+            button[disabled="true"] {
+                filter: opacity(0.5);
+                cursor: not-allowed;
+            }
+            a {
+                color: #00b0f4
+            }
+        </style>
     </head>
     <body>
+        <div style="text-align: center;">
+            <div><h1>Shorty</h1></div>
+            <div><p>The self-hosted open-source link shortener and vanity provider.</p></div>
+            <a href="//github.com/dragdev-studios/shorty">GitHub</a>
+        </div>
         <form>
             <label>URL to shorten: </label>
             <input type="url" id="url" required/><br>
             <label>Length of shortened URL: </label>
             <input type="number" min="4" max="32" value="4" id="length"/><br>
-            <button type="button" id="submit">Create shortened URL!</button>
+            <div style="display: inline;vertical-align: baseline;">
+                <button type="button" id="submit">Create shortened URL!</button>
+                <img src="//cdn.discordapp.com/emojis/706509653726593064.gif?v=1" style="width: 32px;height:32px" hidden id="loading"/>
+            </div>
         </form>
         <hr>
         <p>CURL code (this is recommended over this bodged webpage):</p>
         <pre><code class="sh shell" id="curl-code"></code></pre>
+
+        <br>
+        <div id="output">
+
+        </div>
         
         <script>
             'use strict';
+            const loading = document.getElementById("loading");
+            const submitButton = document.getElementById("submit");
+            const rese = document.getElementById("output");
+            var submitting = false;
+
+            submitButton.addEventListener(
+                "click",
+                () => {submit().catch((e)=>{console.error(e);alert("error. Check console.")});submitButton.disabled = false;}
+            );
+            window.addEventListener("keydown", () => {update_curl_code()});
+            window.addEventListener("keyup", () => {update_curl_code()});
+            window.addEventListener("load", update_curl_code);
+
             function parse_data() {
                 const url = document.getElementById("url").value;
                 const length = document.getElementById("length").value;
@@ -41,20 +85,31 @@
                 };
                 return data;
             };
+
             function update_curl_code() {
+                loading.hidden = false;
                 const codeblock = document.getElementById("curl-code");
                 var content = "$ curl -X POST -H \"short.dragdev.xyz\" -H \"Content-Type: application/json\" \\\n-d {} \\\n£/s";
-                content = content.replace("{}", JSON.stringify(parse_data()));
-                content = content.replace(/\£\/s/, window.location.href+"/s");
+                content = content.replace("{}", '"' + JSON.stringify(parse_data()).replace(/\"/g, "\\\"") + '"');
+                let location = window.location.href;
+                if(location.endsWith("/")) {
+                    location = location.slice(0, -1);
+                };
+                content = content.replace(/\£\/s/, location+"/s ");
                 codeblock.innerText = content;
+                loading.hidden = true;
             };
-            window.addEventListener("keydown", () => {update_curl_code()});
-            window.addEventListener("keyup", () => {update_curl_code()});
+
             async function submit() {
+                if(submitting) {
+                    return;
+                };
+                submitting = true;
                 submitButton.disabled = true;
                 const data = parse_data();
                 console.debug("Posting data:");
                 console.debug(JSON.stringify(data, null, 2));
+                loading.hidden = false;
                 const response = await fetch(
                     "/s",
                     {
@@ -77,16 +132,10 @@
                     console.error(JSON.stringify(response_data));
                     return;
                 };
-                const rese = document.createElement("div");
                 rese.innerHTML = "<p>Your shortened URL: <a href=\"$\">$</a></p>".replace(/\$/g, window.location.href + response_data.code);
-                document.body.appendChild(rese);
+                loading.hidden = true;
+                submitting = false;
             };
-
-            const submitButton = document.getElementById("submit");
-            submitButton.addEventListener(
-                "click",
-                () => {submit().catch((e)=>{console.error(e);alert("error. Check console.")});submitButton.disabled = false;}
-            );
         </script>
         <!-- <script src="" async defer></script> -->
     </body>
