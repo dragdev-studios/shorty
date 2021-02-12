@@ -3,6 +3,7 @@ import secrets
 from pydantic import BaseModel, Field
 from datetime import datetime, timedelta
 from typing import Union
+from ratelimit import limits
 
 
 # == HTTP MODELS == #
@@ -56,6 +57,7 @@ class Shortened:
         """A boolean indicating if the current URL can be served (I.E. not expired)."""
         return datetime.utcnow() < self.expire
 
+    @limits(period=60)
     async def create(self, code: str):
         token = secrets.token_hex(64)
         args = (self.source, code, self.expire.isoformat(), token)

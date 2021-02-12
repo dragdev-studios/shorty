@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.background import BackgroundTask
 
 import models
-# from ratelimit import Bucket
+from ratelimit import RateLimitException
 
 allowed_statuses = list(range(100, 400))
 
@@ -113,7 +113,6 @@ async def shutdown():
 
 @app.get("/{path}")
 async def get_vanity_or_shortened(path: str, user_agent: str = Header("No User Agent")):
-    print(user_agent, "Bot" in user_agent)
     if "bot" in user_agent or "python" in user_agent or "curl" in user_agent or "wget" in user_agent:
         return EMBED_RESPONSE
     async with app.db.execute(
@@ -159,6 +158,14 @@ async def create_shortened_url(body: models.ShortenBody, host: str = Header(...)
         raise HTTPException(
             400,
             "Too many links are using this length - Please increase."
+        )
+    except RateLimitException as e:
+        raise HTTPException(
+            429,
+            "global cooldown - Please wait.",
+            {
+                "X-Ratelimit-Reset-After": e.period_remaining
+            }
         )
     return {
         "url": f"https://{host}/{code}",
