@@ -7,4 +7,4 @@ aiosqlite==0.16.1
 # Yes, we're really asynchronous. Don't ask.
 
 ratelimit==2.2.1
-pydantic==1.7.3
+pydantic==1.7.4
