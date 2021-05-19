@@ -1,10 +1,11 @@
 from random import choice
 from string import ascii_letters, digits
 from urllib.parse import quote_plus
+from fnmatch import fnmatch
 
 import aiohttp
 import aiosqlite
-from fastapi import FastAPI, HTTPException, Header  #, Cookie, Request
+from fastapi import FastAPI, HTTPException, Header, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -13,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.background import BackgroundTask
 
 import models
-from ratelimit import RateLimitException
+from ratelimit import buckets, Ratelimit
 
 allowed_statuses = list(range(100, 400))
 
@@ -41,6 +42,33 @@ EMBED_RESPONSE = HTMLResponse(EMBED_DATA, 200)
 
 app = FastAPI(title="Shorty", description="Self-hosted link shortener that also serves as a vanity link provider.")
 app.db = None
+limits = buckets
+ratelimits = {
+    "/s": [10, 300],
+}
+
+
+@app.middleware("http")
+async def handle_ratelimit(request: Request, call_next):
+    ip = request.client.host
+    route = request.url.path
+    for p in ratelimits.keys():
+        if fnmatch(route, p):
+            if ip not in buckets.keys():
+                buckets[ip] = {}
+            if p not in buckets[ip].keys():
+                buckets[ip][p] = Ratelimit(route=p, hits=ratelimits[p][0], cooldown=ratelimits[p][1])
+            rl = buckets[ip][p]
+            if rl.ratetlimited:
+                raise HTTPException(
+                    429, {"retry_after": rl.retry_after * 1000, "retry_after_precision": "milliseconds"}
+                )
+            response = await call_next(request)
+            buckets[ip][p].add_hit()
+            break
+    else:
+        response = await call_next(request)
+    return response
 
 
 async def update_usage(serve, ua, src: str = "short"):
@@ -51,7 +79,7 @@ async def update_usage(serve, ua, src: str = "short"):
         UPDATE '?'
         SET uses=uses+1
         WHERE serve='?';""",
-        (src, serve)
+        (src, serve),
     )
     await app.db.commit()
 
@@ -88,38 +116,15 @@ async def shutdown():
     await app.db.close()
 
 
-# THIS DOESN'T WORK! WHY?!
-# @app.middleware("http")
-# async def set_session_cookie(request: Request, call_next):
-#     print(sessions)
-#     if _ses := request.cookies.get("session"):
-#         if _ses in sessions.keys():
-#             if sessions[_ses].ratelimited:
-#                 raise HTTPException(
-#                     429,
-#                     "slow down!"
-#                 )
-#     response = await call_next(request)
-#     if not request.cookies.get("session"):
-#         response.set_cookie(
-#             key="session",
-#             value=str(hash(request.client))
-#         )
-#     elif (session := request.cookies["session"]) not in sessions.keys():
-#         sessions[session] = Bucket(10, 60)
-#         sessions[session].used += 1
-#     return response
-
-
 @app.get("/{path}")
 async def get_vanity_or_shortened(path: str, user_agent: str = Header("No User Agent")):
     if "bot" in user_agent or "python" in user_agent or "curl" in user_agent or "wget" in user_agent:
         return EMBED_RESPONSE
     async with app.db.execute(
-            """
+        """
             SELECT source FROM short WHERE serve=?
             """,
-            (path,)
+        (path,),
     ) as cursor:
         source = await cursor.fetchone()
         if not source:
@@ -141,7 +146,7 @@ async def create_shortened_url(body: models.ShortenBody, host: str = Header(...)
                     raise HTTPException(400, f"Invalid URL (got status {response.status})")
     except aiohttp.ClientError as e:
         raise HTTPException(400, f"Invalid URL (failed to connect, {e})")
-    code = ''.join([choice(usable) for _ in range(body.length)])
+    code = "".join([choice(usable) for _ in range(body.length)])
     if not code or body.length < 3:
         raise HTTPException(400, "path length was too short.")
     shortened = models.Shortened(
@@ -150,37 +155,25 @@ async def create_shortened_url(body: models.ShortenBody, host: str = Header(...)
         models.Shortened.calculate_offset(body.expire or 999_999_999_999_999_999_999_999),
         0,
         "None",
-        connection=app.db
+        connection=app.db,
     )
     try:
         await shortened.create(code)
     except aiosqlite.IntegrityError:
-        raise HTTPException(
-            400,
-            "Too many links are using this length - Please increase."
-        )
+        raise HTTPException(400, "Too many links are using this length - Please increase.")
     except RateLimitException as e:
-        raise HTTPException(
-            429,
-            "global cooldown - Please wait.",
-            {
-                "X-Ratelimit-Reset-After": e.period_remaining
-            }
-        )
-    return {
-        "url": f"https://{host}/{code}",
-        "code": code
-    }
+        raise HTTPException(429, "global cooldown - Please wait.", {"X-Ratelimit-Reset-After": e.period_remaining})
+    return {"url": f"https://{host}/{code}", "code": code}
 
 
 @app.delete("/s/{code}")
 async def delete_shortened_code(code: str, token: str):
     """Deletes a shortened URL."""
     async with app.db.execute(
-            """
+        """
             SELECT source, token FROM short WHERE serve=?
             """,
-            (code,)
+        (code,),
     ) as cursor:
         source = await cursor.fetchone()
         if not source:
@@ -205,7 +198,7 @@ async def create_vanity_url(body: models.ShortenBody, host: str = Header(...)):
                     raise HTTPException(400, f"Invalid URL (got status {response.status})")
     except aiohttp.ClientError as e:
         raise HTTPException(400, f"Invalid URL (failed to connect, {e})")
-    code = ''.join([choice(usable) for _ in range(body.length)])
+    code = "".join([choice(usable) for _ in range(body.length)])
     if not code or body.length < 4:
         raise HTTPException(400, "path length was too short.")
     shortened = models.Shortened(
@@ -214,29 +207,23 @@ async def create_vanity_url(body: models.ShortenBody, host: str = Header(...)):
         models.Shortened.calculate_offset(body.expire or 999_999_999_999_999_999_999_999),
         0,
         "None",
-        connection=app.db
+        connection=app.db,
     )
     try:
         await shortened.create(code)
     except aiosqlite.IntegrityError:
-        raise HTTPException(
-            400,
-            "Too many links are using this length - Please increase."
-        )
-    return {
-        "url": f"https://{host}/{code}",
-        "code": code
-    }
+        raise HTTPException(400, "Too many links are using this length - Please increase.")
+    return {"url": f"https://{host}/{code}", "code": code}
 
 
 @app.delete("/v/{code}")
 async def delete_vanity_code(code: str, token: str):
     """Deletes a shortened URL."""
     async with app.db.execute(
-            """
+        """
             SELECT source, token FROM short WHERE serve=?
             """,
-            (code,)
+        (code,),
     ) as cursor:
         source = await cursor.fetchone()
         if not source:
