@@ -47,12 +47,12 @@
             <input type="number" min="4" max="32" value="4" id="length"/><br>
             <div style="display: inline;vertical-align: baseline;">
                 <button type="button" id="submit">Create shortened URL!</button>
-                <img src="//cdn.discordapp.com/emojis/706509653726593064.gif?v=1" style="width: 32px;height:32px" hidden id="loading"/>
+                <img src="/assets/loading.gif" style="width: 32px;height:32px" hidden id="loading"/>
             </div>
         </form>
         <hr>
-        <p>CURL code (this is recommended over this bodged webpage):</p>
-        <pre><code class="sh shell" id="curl-code"></code></pre>
+        <!-- <p>CURL code (this is recommended over this bodged webpage):</p>
+        <pre><code class="sh shell" id="curl-code"></code></pre>-->
 
         <br>
         <div id="output">
@@ -87,6 +87,7 @@
             };
 
             function update_curl_code() {
+                return;/*
                 loading.hidden = false;
                 const codeblock = document.getElementById("curl-code");
                 var content = "$ curl -X POST -H \"short.dragdev.xyz\" -H \"Content-Type: application/json\" \\\n-d {} \\\n£/s";
@@ -97,7 +98,7 @@
                 };
                 content = content.replace(/\£\/s/, location+"/s ");
                 codeblock.innerText = content;
-                loading.hidden = true;
+                loading.hidden = true;*/
             };
 
             async function submit() {
