@@ -11,8 +11,8 @@
         <meta name="description" content="">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/highlight.js/10.5.0/styles/solarized-dark.min.css">
-        <script src="/js/hl.js"></script>
-        <script>hljs.initHighlightingOnLoad();</script>
+        <script src="/js/hl.js" defer id="hljs"></script>
+        <script>document.getElementById("hljs").addEventListener("load", hljs.highlightAll);</script>
         <script src="/js/warn.js" async></script>
         <!-- The warn.js script isn't really needed until the user clicks the submit button. That's when things can go wrong. -->
         <style>
@@ -37,7 +37,7 @@
     <body>
         <div style="text-align: center;">
             <div><h1>Shorty</h1></div>
-            <div><p>The self-hosted open-source link shortener and vanity provider.</p></div>
+            <div><p>A self-hosted open-source link shortener and vanity provider.</p></div>
             <a href="//github.com/dragdev-studios/shorty">GitHub</a>
         </div>
         <form>
@@ -70,9 +70,9 @@
                 "click",
                 () => {submit().catch((e)=>{console.error(e);alert("error. Check console.")});submitButton.disabled = false;}
             );
-            window.addEventListener("keydown", () => {update_curl_code()});
-            window.addEventListener("keyup", () => {update_curl_code()});
-            window.addEventListener("load", update_curl_code);
+            // window.addEventListener("keydown", () => {update_curl_code()});
+            // window.addEventListener("keyup", () => {update_curl_code()});
+            // window.addEventListener("load", update_curl_code);
 
             function parse_data() {
                 const url = document.getElementById("url").value;
@@ -121,14 +121,27 @@
                         }
                     }
                 );
-                const response_data = await response.json();
+                var response_data;
+                try {
+                    response_data = await response.json();
+                } catch (e) {
+                    updateWarning("Got an unexpected response from the server. No changes have been made.");
+                    console.error("Failed to download JSON response.");
+                    loading.hidden = true;
+                    submitting = false;
+                    return;
+                };
                 if(!response.ok) {
-                    if (response.status==400) {
-                        updateWarning("Invalid URL", "Please make sure you typed it correct and the target server is actually online.", response_data);
-                        alert("The URL is invalid.");
-                        return
+                    switch (response.status) {
+                        case 429:
+                            updateWarning("Slow down, you're being ratelimited! Try again in $ seconds.".replace("$", response_data.retry_after*1000));
+                            break;
+                        case 400:
+                            updateWarning("Please increase the length of your vanity and try again.");
+                        default:
+                            updateWarning("Unknown error.");
+                            break;
                     };
-                    alert("Failed to create vanity..")
                     console.error(response.status + response.statusText);
                     console.error(JSON.stringify(response_data));
                     return;
@@ -138,6 +151,5 @@
                 submitting = false;
             };
         </script>
-        <!-- <script src="" async defer></script> -->
     </body>
 </html>

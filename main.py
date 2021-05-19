@@ -59,9 +59,9 @@ async def handle_ratelimit(request: Request, call_next):
             if p not in buckets[ip].keys():
                 buckets[ip][p] = Ratelimit(route=p, hits=ratelimits[p][0], cooldown=ratelimits[p][1])
             rl = buckets[ip][p]
-            if rl.ratetlimited:
-                raise HTTPException(
-                    429, {"retry_after": rl.retry_after * 1000, "retry_after_precision": "milliseconds"}
+            if rl.ratelimited:
+                return JSONResponse(
+                    {"retry_after": rl.retry_after * 1000, "retry_after_precision": "milliseconds"}, 429
                 )
             response = await call_next(request)
             buckets[ip][p].add_hit()
@@ -118,7 +118,7 @@ async def shutdown():
 
 @app.get("/{path}")
 async def get_vanity_or_shortened(path: str, user_agent: str = Header("No User Agent")):
-    if "bot" in user_agent or "python" in user_agent or "curl" in user_agent or "wget" in user_agent:
+    if "Mozilla" not in user_agent:
         return EMBED_RESPONSE
     async with app.db.execute(
         """
