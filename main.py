@@ -161,8 +161,6 @@ async def create_shortened_url(body: models.ShortenBody, host: str = Header(...)
         await shortened.create(code)
     except aiosqlite.IntegrityError:
         raise HTTPException(400, "Too many links are using this length - Please increase.")
-    except RateLimitException as e:
-        raise HTTPException(429, "global cooldown - Please wait.", {"X-Ratelimit-Reset-After": e.period_remaining})
     return {"url": f"https://{host}/{code}", "code": code}
 
 
